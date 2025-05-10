@@ -1,0 +1,10 @@
+[package]
+name = "dynamic-syscall"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.37", features = ["derive"] }
+strum = "0.27.1"
+strum_macros = "0.27.1"
+syscalls = "0.6.18"
