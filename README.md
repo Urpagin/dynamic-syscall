@@ -31,7 +31,7 @@ System call number 1 corresponds to `write`, which takes:
 Example:
 
 ```bash
-$ ./dynamic-syscall 1 $'s:Hello, World\n' n:13
+./dynamic-syscall 1 n:1 $'s:Hello, World\n' n:13
 ```
 
 **Note:** To correctly pass special characters like `\n`, use **ANSI C quoting** by prefixing your string with `$` and enclosing it in single quotes. Otherwise, characters like `\n` will be passed as literal backslashes and `n` (i.e., `"\\n"`), due to how BASH handles escaping.
@@ -42,7 +42,7 @@ $ ./dynamic-syscall 1 $'s:Hello, World\n' n:13
 2. Run:
 
 ```bash
-$ ./dynamic-syscall 62 n:414195 n:9
+./dynamic-syscall 62 n:414195 n:9
 ```
 
 Explanation:
@@ -57,7 +57,7 @@ Explanation:
 Currently, only two argument types are supported:
 
 * `s:` — string (converted to a pointer)
-* `n:` — unsigned number (`u64`)
+* `n:` — unsigned number (`usize`)
 
 You **can** pass negative numbers, and they usually work, because casting from `i32` to `usize` preserves the bit pattern. However, this is architecture-dependent and not type-safe — be cautious.
 

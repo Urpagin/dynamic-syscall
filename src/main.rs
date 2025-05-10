@@ -80,7 +80,7 @@ impl CastArg {
 /// Parses input args and return the system call number and its usize arguments.
 fn parse_args() -> Result<(Sysno, SyscallArgs), Box<dyn error::Error>> {
     let args: Vec<String> = env::args().collect();
-    dbg!(&args);
+    println!("Input arguments: {args:#?}\n\n");
 
     // Self + syscall number
     if args.len() < 2 {
@@ -144,7 +144,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         Ok(args) => {
             unsafe {
                 match syscall(args.0, &args.1) {
-                    Ok(code) => println!("Syscall sucessfully executed: {code}."),
+                    Ok(code) => {
+                        println!("Syscall sucessfully executed.\nSyscall return value: {code}")
+                    }
                     Err(e) => eprintln!("Failed to execute syscall: {e}"),
                 }
             }
