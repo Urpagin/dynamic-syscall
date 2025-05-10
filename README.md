@@ -18,7 +18,8 @@ Arguments are passed in the order expected by the syscall.
 
 If you want to use the `write(2)` syscall — instead of bothering with `echo(1)` or `printf(1)` — you can use this program to directly interface with the kernel.
 
-Reference for syscall numbers: [Linux System Call Table (x86\_64)](https://blog.rchapman.org/posts/Linux_System_Call_Table_for_x86_64/)
+Reference for syscall numbers: [Linux System Call Table (x86\_64)](https://filippo.io/linux-syscall-table/)
+(**Double click on a row** to reveal the arguments list)
 
 ### Writing to stdout
 
