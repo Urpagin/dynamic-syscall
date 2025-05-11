@@ -1,8 +1,23 @@
 # Dynamic Syscalls
 
-## Syslang purpose
+## Syslang
 
-Programming language, or very simple one. Let's focus on first executing sequentially syscalls from a .scx file (system call exec).
+The project has now evolved into a very simple programming language. You can interpret `.scx` files using the `--interpret <scx source file>` argument.
+
+The language currently supports:
+
+* One keyword: `syscall`
+* Two data types: numbers like `42`, and strings like `"this is a string"`
+* Comments: **start a line** with `#` to write a comment
+
+What it doesn't have (yet):
+
+* Variables
+* Loops
+* Functions
+* Transpilation or compilation
+* And more. I'm not even sure if it qualifies as a full programming language at this point. Maybe it's more of a DSL (domain-specific language).
+
 
 ## Purpose
 
