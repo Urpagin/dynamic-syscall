@@ -25,9 +25,6 @@ The purpose of this project is to reduce the friction involved in making a syste
 
 ## Usage
 
-`--interpret <.scx source file>` to interpret the file.
-`--quiet` to enable quiet mode **when interpreting** a source file. (silences any prints)
-
 The first argument is the **syscall number**. You do **not** need to type-hint it.
 The next arguments (up to a maximum of six) **must** be type-hinted:
 
@@ -35,6 +32,14 @@ The next arguments (up to a maximum of six) **must** be type-hinted:
 * Use `s:<value>` to indicate a string whose pointer should be passed
 
 Arguments are passed in the order expected by the syscall.
+
+### Interpreting syslang source files
+
+
+`--interpret <.scx source file>` to interpret the file.
+`--quiet` to enable quiet mode **when interpreting** a source file. (silences any prints)
+
+To get a grasp on the syntax, check out the `.scx` files under the `examples/` directory.
 
 ## Examples
 
