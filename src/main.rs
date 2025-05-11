@@ -1,12 +1,16 @@
 use core::error;
+use logos::{Lexer, Logos};
 use std::{
-    env::{self, args},
-    fs,
+    env::{self},
+    fs::{self, File},
+    io::{BufRead, BufReader},
     path::{self, Path, PathBuf},
 };
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use syscalls::{self, SyscallArgs, Sysno, syscall, syscall_args};
+
+const COMMENT_STR: &str = "#";
 
 #[derive(Debug, EnumIter)]
 enum CastArg {
@@ -143,8 +147,11 @@ fn parse_args() -> Result<(Sysno, SyscallArgs), Box<dyn error::Error>> {
     Ok((sysno, res))
 }
 
-/// Returns true if --interpret <syslang source file> is provided in the args
+/// Returns true if --compile <syslang source file> is provided in the args
 fn does_interpret_syslang() -> Option<PathBuf> {
+    const ARG_NAME: &str = "--interpret";
+    const SYSLANG_EXT: &str = "scx";
+
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
         return None;
@@ -153,7 +160,7 @@ fn does_interpret_syslang() -> Option<PathBuf> {
     let arg = args[1].clone();
     let filepath = path::Path::new(&args[2]);
 
-    if arg != "--interpret" {
+    if arg != ARG_NAME {
         return None;
     }
 
@@ -163,14 +170,194 @@ fn does_interpret_syslang() -> Option<PathBuf> {
     }
 
     if let Some(ext) = filepath.extension() {
-        if ext != "sl" {
-            eprintln!("--interpret file is not a .sl file!");
+        if ext != SYSLANG_EXT {
+            eprintln!("--interpret file is not a .scx file!");
             return None;
         }
         Some(filepath.into())
     } else {
-        eprintln!("--interpret file is not a .sl file!");
+        eprintln!("--interpret file is not a .scx file!");
         None
+    }
+}
+
+#[derive(Logos, Debug, PartialEq)]
+#[logos(skip r"[ \t\n\f]+")] // Ignore this regex pattern between tokens
+enum Token {
+    // Keyword 'syscall'
+    #[token("syscall")]
+    Syscall,
+
+    // I think this pattern is flawed: it also takes numbers inside strings.
+    #[regex(r"[+-]?[\d]+")]
+    Number,
+
+    // This regex pattern is supposed to match everything inside double quotes.
+    #[regex(r#"\"([^\"]*)\""#)]
+    String,
+}
+
+/// Returns a string with first and last character removed.
+fn parse_string_literal(string: &str) -> String {
+    if string.len() < 2 {
+        eprintln!("{string}");
+        panic!("Failed to slice string to remove quotes. String len is < 2.");
+    }
+    let s = &string[1..string.len() - 1]; // strip surrounding quotes
+    s.replace("\\n", "\n").replace("\\t", "\t")
+}
+
+/// Well I mean, this function lexes, interprets, bakes eggs, cuts onions....
+fn lex(file: &Path) {
+    let file = File::open(file).expect("Failed to open source file");
+    let reader = BufReader::new(file);
+
+    let mut calls: Vec<Box<dyn FnOnce()>> = Vec::new();
+    for (idx, line_result) in reader.lines().enumerate() {
+        let line: String = line_result.expect("Failed to read line in source file");
+
+        // Skip comments (only works on comments having their own lines)
+        if line.starts_with(COMMENT_STR) {
+            continue;
+        }
+
+        let mut lexer = Token::lexer(&line);
+        println!("--- LEXING l{:04} ---", idx + 1);
+        add_call(&mut calls, &mut lexer, idx + 1);
+        println!("\n")
+    }
+
+    interpret(calls);
+}
+
+/// Actually executes the code from the source files.
+fn interpret(calls: Vec<Box<dyn FnOnce()>>) {
+    println!("Interpreting...");
+
+    for call in calls.into_iter() {
+        call();
+    }
+}
+
+/// Parses a line from the lexer and adds a call to the calls.
+fn add_call(calls: &mut Vec<Box<dyn FnOnce()>>, lexer_line: &mut Lexer<'_, Token>, line: usize) {
+    let mut syscall_buffer: Vec<(usize, Token, String)> = Vec::new();
+    // This is smelly isn't it?
+    let mut is_syscall: bool = false;
+
+    // Index of the tokens in a line.
+    // e.g., syscall ... .... Here syscall is 0.
+    let mut idx: usize = 0;
+
+    while let Some(t) = lexer_line.next() {
+        let token: Token = t.expect("Failed to tokenize/lex");
+        let slice = lexer_line.slice();
+        println!("Got token: {token:?} with slice: {slice}");
+
+        // I should make a function to delete the syscall parsing?
+        if token == Token::Syscall {
+            is_syscall = true;
+            idx += 1;
+            continue;
+        }
+
+        match token {
+            Token::Syscall => unreachable!(),
+            Token::Number => syscall_buffer.push((idx, token, slice.to_string())),
+            Token::String => syscall_buffer.push((idx, token, parse_string_literal(slice))),
+            _ => {
+                panic!("Unexpected token: {:?}", token);
+            }
+        }
+
+        idx += 1;
+    }
+
+    let sc_buf_len: usize = syscall_buffer.len();
+    // 7 because 6 args MAX + sysno = 7.
+    if is_syscall && (sc_buf_len > 7 || sc_buf_len == 0) {
+        panic!("Syscall must have at least 1 and at most 6 arguments.");
+    }
+
+    if is_syscall {
+        // the name.....
+        let mut sc_final_args: Vec<usize> = Vec::with_capacity(6);
+
+        for arg in syscall_buffer {
+            let idx: usize = arg.0;
+            let token: Token = arg.1;
+            let slice: String = arg.2;
+
+            match token {
+                Token::Number => {
+                    let n: usize = slice.parse().expect("Failed to parse number");
+                    sc_final_args.push(n);
+                }
+                Token::String => {
+                    // Very bad right, I'm leaking memory in a loop :skullemoji:
+                    // I just want my weird code to work ASAP, to hell best practices!
+                    let slice_leak: &'static str = Box::leak(slice.to_string().into_boxed_str());
+                    let str_ptr: usize = slice_leak.as_ptr() as usize;
+                    sc_final_args.push(str_ptr);
+                }
+                _ => panic!("Unexpected token: {:?}", token),
+            }
+        }
+
+        // now we just append the calls vector with the right function.
+        // This function that when called, will invoke the syscall using the
+        // sc_final_args.
+
+        let sysno = Sysno::new(sc_final_args[0]).expect("Failed to parse syscall number");
+        sc_final_args.remove(0);
+
+        let sysargs = match sc_final_args.len() {
+            0 => syscall_args!(),
+            1 => syscall_args!(sc_final_args[0]),
+            2 => syscall_args!(sc_final_args[0], sc_final_args[1]),
+            3 => syscall_args!(sc_final_args[0], sc_final_args[1], sc_final_args[2]),
+            4 => syscall_args!(
+                sc_final_args[0],
+                sc_final_args[1],
+                sc_final_args[2],
+                sc_final_args[3]
+            ),
+            5 => syscall_args!(
+                sc_final_args[0],
+                sc_final_args[1],
+                sc_final_args[2],
+                sc_final_args[3],
+                sc_final_args[4]
+            ),
+            6 => syscall_args!(
+                sc_final_args[0],
+                sc_final_args[1],
+                sc_final_args[2],
+                sc_final_args[3],
+                sc_final_args[4],
+                sc_final_args[5]
+            ),
+            _ => panic!("Too many arguments"),
+        };
+
+        // The code terrifies me
+
+        calls.push(Box::new(move || {
+            invoke_syscall_interpret(sysno, sysargs, line)
+        }));
+    }
+}
+
+/// Invokes the syscall immediatly when called using the passed arguments.
+fn invoke_syscall_interpret(sysno: Sysno, sysargs: SyscallArgs, line: usize) {
+    unsafe {
+        match syscall(sysno, &sysargs) {
+            Ok(code) => {
+                println!("Syscall at line {} returned: {}", line + 1, code);
+                //println!("Syscall sucessfully executed.\nSyscall return value: {code}")
+            }
+            Err(e) => eprintln!("Failed to execute syscall: {e}"),
+        }
     }
 }
 
@@ -195,7 +382,10 @@ fn begin_arguments() -> Result<(), Box<dyn error::Error>> {
 /// Interprets a syslang file
 fn begin_file(filepath: &Path) -> Result<(), Box<dyn error::Error>> {
     println!("Interpreting file {filepath:?}!");
-    todo!()
+    println!("Begin lexing...");
+    lex(filepath);
+
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {

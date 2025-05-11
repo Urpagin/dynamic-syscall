@@ -2,7 +2,7 @@
 
 ## Syslang purpose
 
-Programming language, or very simple one. Let's focus on first executing sequentially syscalls from a .sl file.
+Programming language, or very simple one. Let's focus on first executing sequentially syscalls from a .scx file (system call exec).
 
 ## Purpose
 
