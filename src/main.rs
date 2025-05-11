@@ -1,8 +1,9 @@
+use colored::*;
 use core::error;
 use logos::{Lexer, Logos};
 use std::{
     env::{self},
-    fs::{self, File},
+    fs::File,
     io::{BufRead, BufReader},
     path::{self, Path, PathBuf},
 };
@@ -148,7 +149,7 @@ fn parse_args() -> Result<(Sysno, SyscallArgs), Box<dyn error::Error>> {
 }
 
 /// Returns true if --compile <syslang source file> is provided in the args
-fn does_interpret_syslang() -> Option<PathBuf> {
+fn is_interpret_mode() -> Option<PathBuf> {
     const ARG_NAME: &str = "--interpret";
     const SYSLANG_EXT: &str = "scx";
 
@@ -222,9 +223,7 @@ fn lex(file: &Path) {
         }
 
         let mut lexer = Token::lexer(&line);
-        println!("--- LEXING l{:04} ---", idx + 1);
         add_call(&mut calls, &mut lexer, idx + 1);
-        println!("\n")
     }
 
     interpret(calls);
@@ -232,8 +231,6 @@ fn lex(file: &Path) {
 
 /// Actually executes the code from the source files.
 fn interpret(calls: Vec<Box<dyn FnOnce()>>) {
-    println!("Interpreting...");
-
     for call in calls.into_iter() {
         call();
     }
@@ -252,7 +249,6 @@ fn add_call(calls: &mut Vec<Box<dyn FnOnce()>>, lexer_line: &mut Lexer<'_, Token
     while let Some(t) = lexer_line.next() {
         let token: Token = t.expect("Failed to tokenize/lex");
         let slice = lexer_line.slice();
-        println!("Got token: {token:?} with slice: {slice}");
 
         // I should make a function to delete the syscall parsing?
         if token == Token::Syscall {
@@ -262,7 +258,6 @@ fn add_call(calls: &mut Vec<Box<dyn FnOnce()>>, lexer_line: &mut Lexer<'_, Token
         }
 
         match token {
-            Token::Syscall => unreachable!(),
             Token::Number => syscall_buffer.push((idx, token, slice.to_string())),
             Token::String => syscall_buffer.push((idx, token, parse_string_literal(slice))),
             _ => {
@@ -284,7 +279,7 @@ fn add_call(calls: &mut Vec<Box<dyn FnOnce()>>, lexer_line: &mut Lexer<'_, Token
         let mut sc_final_args: Vec<usize> = Vec::with_capacity(6);
 
         for arg in syscall_buffer {
-            let idx: usize = arg.0;
+            let _idx: usize = arg.0;
             let token: Token = arg.1;
             let slice: String = arg.2;
 
@@ -311,6 +306,8 @@ fn add_call(calls: &mut Vec<Box<dyn FnOnce()>>, lexer_line: &mut Lexer<'_, Token
         let sysno = Sysno::new(sc_final_args[0]).expect("Failed to parse syscall number");
         sc_final_args.remove(0);
 
+        // This is duplicate code from above.
+        // TODO: deduplicate.
         let sysargs = match sc_final_args.len() {
             0 => syscall_args!(),
             1 => syscall_args!(sc_final_args[0]),
@@ -342,23 +339,43 @@ fn add_call(calls: &mut Vec<Box<dyn FnOnce()>>, lexer_line: &mut Lexer<'_, Token
 
         // The code terrifies me
 
+        let mut is_quiet: bool = false;
+        for arg in &env::args().collect::<Vec<String>>() {
+            if arg.contains("--quiet") {
+                is_quiet = true;
+            }
+        }
+
         calls.push(Box::new(move || {
-            invoke_syscall_interpret(sysno, sysargs, line)
+            invoke_syscall_interpret(sysno, sysargs, line, is_quiet)
         }));
     }
 }
 
 /// Invokes the syscall immediatly when called using the passed arguments.
-fn invoke_syscall_interpret(sysno: Sysno, sysargs: SyscallArgs, line: usize) {
+fn invoke_syscall_interpret(sysno: Sysno, sysargs: SyscallArgs, line: usize, is_quiet: bool) {
     unsafe {
         match syscall(sysno, &sysargs) {
             Ok(code) => {
-                println!("Syscall at line {} returned: {}", line + 1, code);
-                //println!("Syscall sucessfully executed.\nSyscall return value: {code}")
+                if !is_quiet {
+                    print_syscall_result(line + 1, code);
+                }
             }
             Err(e) => eprintln!("Failed to execute syscall: {e}"),
         }
     }
+}
+
+/// Prints a stylized syscall result: line number, message, return value.
+pub fn print_syscall_result(line: usize, code: usize) {
+    println!(
+        "{}{}{} {} {}",
+        "[ line ".blue(),
+        format!("{:04}", line).yellow().bold(),
+        " ]".blue(),
+        "syscall returned:".white().bold(),
+        format!("{}", code).green().bold()
+    );
 }
 
 /// Invokes a single syscall from the CLI arguments.
@@ -381,15 +398,13 @@ fn begin_arguments() -> Result<(), Box<dyn error::Error>> {
 
 /// Interprets a syslang file
 fn begin_file(filepath: &Path) -> Result<(), Box<dyn error::Error>> {
-    println!("Interpreting file {filepath:?}!");
-    println!("Begin lexing...");
     lex(filepath);
 
     Ok(())
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    if let Some(filepath) = does_interpret_syslang() {
+    if let Some(filepath) = is_interpret_mode() {
         begin_file(&filepath)?;
     } else {
         begin_arguments()?;

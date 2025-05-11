@@ -7,5 +7,10 @@ syscall 1 1 "Hello, World!\n" 14
 syscall 1 1 "Hello, World! X2!!\n" 19
 
 # Prints "Hello, World!" and also some hundreds of bytes more
-syscall 1 1 "Hello, World!\n" 10000
+#syscall 1 1 "Hello, World!\n" 10000
 
+# Get system time
+syscall 201
+
+# Get PID
+syscall 39
