@@ -1,5 +1,9 @@
 use core::error;
-use std::env;
+use std::{
+    env::{self, args},
+    fs,
+    path::{self, Path, PathBuf},
+};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use syscalls::{self, SyscallArgs, Sysno, syscall, syscall_args};
@@ -139,7 +143,39 @@ fn parse_args() -> Result<(Sysno, SyscallArgs), Box<dyn error::Error>> {
     Ok((sysno, res))
 }
 
-fn main() -> Result<(), Box<dyn error::Error>> {
+/// Returns true if --interpret <syslang source file> is provided in the args
+fn does_interpret_syslang() -> Option<PathBuf> {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 3 {
+        return None;
+    }
+
+    let arg = args[1].clone();
+    let filepath = path::Path::new(&args[2]);
+
+    if arg != "--interpret" {
+        return None;
+    }
+
+    if !filepath.exists() {
+        eprintln!("--interpret file argument is incorrect!");
+        return None;
+    }
+
+    if let Some(ext) = filepath.extension() {
+        if ext != "sl" {
+            eprintln!("--interpret file is not a .sl file!");
+            return None;
+        }
+        Some(filepath.into())
+    } else {
+        eprintln!("--interpret file is not a .sl file!");
+        None
+    }
+}
+
+/// Invokes a single syscall from the CLI arguments.
+fn begin_arguments() -> Result<(), Box<dyn error::Error>> {
     match parse_args() {
         Ok(args) => {
             unsafe {
@@ -154,4 +190,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         }
         Err(e) => Err(e),
     }
+}
+
+/// Interprets a syslang file
+fn begin_file(filepath: &Path) -> Result<(), Box<dyn error::Error>> {
+    println!("Interpreting file {filepath:?}!");
+    todo!()
+}
+
+fn main() -> Result<(), Box<dyn error::Error>> {
+    if let Some(filepath) = does_interpret_syslang() {
+        begin_file(&filepath)?;
+    } else {
+        begin_arguments()?;
+    }
+
+    Ok(())
 }

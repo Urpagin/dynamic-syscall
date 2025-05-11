@@ -1,5 +1,9 @@
 # Dynamic Syscalls
 
+## Syslang purpose
+
+Programming language, or very simple one. Let's focus on first executing sequentially syscalls from a .sl file.
+
 ## Purpose
 
 The purpose of this project is to reduce the friction involved in making a system call directly from userspace. It allows you to invoke syscalls without the need to write or compile a full C or Rust program — just provide the syscall number and up to six arguments, and it will do the rest.
