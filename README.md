@@ -94,4 +94,5 @@ You **can** pass negative numbers, and they usually work, because casting from `
 * Allow plain numbers (e.g., `42`) to default to `usize` without requiring the `n:` prefix?
 * Add support for additional types (`i32`, `NULL`, raw pointers, flags, etc.)
 * Optional unescaping of common character sequences (`\n`, `\t`, etc.) internally
+* For debug printing, have a map for each sysno and print their names (e.g., 1 would be "write")
 
