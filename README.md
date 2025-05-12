@@ -95,4 +95,5 @@ You **can** pass negative numbers, and they usually work, because casting from `
 * Add support for additional types (`i32`, `NULL`, raw pointers, flags, etc.)
 * Optional unescaping of common character sequences (`\n`, `\t`, etc.) internally
 * For debug printing, have a map for each sysno and print their names (e.g., 1 would be "write")
+* Allow for non-base10 numbers. (e.g., 0xFF or 0o644).
 

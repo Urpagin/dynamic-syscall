@@ -1,0 +1,10 @@
+# Open file test.txt with read-write permissions.
+# 0o644 is: user (read/write), group (read), others (read)
+# 420(base10) is 644(base8)
+syscall 2 "test.txt" 66 420
+
+# We assume the file's fd is 3.
+# Write Hello inside the file.
+syscall 1 3 "Hello\n" 6
+
+
